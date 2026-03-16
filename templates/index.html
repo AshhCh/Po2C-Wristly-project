@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Wristly</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+        /* [unchanged styles...] */
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', sans-serif;
+            background-color: #f3c7bd;
+            color: #6a3fb5;
+        }
+
+        .topbar {
+            background-color: #6a3fb5;
+            color: white;
+            padding: 1rem 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+        }
+
+        .topbar-left {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-weight: bold;
+            font-size: 1.2rem;
+        }
+
+        .topbar-left img {
+            height: 32px;
+            width: 32px;
+            object-fit: contain;
+        }
+
+        .status span {
+            color: lightgreen;
+            font-weight: bold;
+        }
+
+        .container {
+
+            max-width: 1000px;
+            margin: 2rem auto;
+            background-color: white;
+            padding: 2rem;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(50, 64, 196, 0.2);
+        }
+
+        h1 {
+            text-align: center;
+            color: #6a3fb5;
+            margin-bottom: 2rem;
+        }
+
+        .flex-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            justify-content: space-between;
+        }
+
+        .card {
+            flex: 1;
+            min-width: 220px;
+            background-color: #f9f9f9;
+            border-radius: 10px;
+            padding: 1rem;
+            border: 1px solid #eee;
+        }
+
+        .card-title {
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+
+        .value {
+            color: #000;
+            font-size: 1.2rem;
+        }
+
+        .coordinates {
+            background-color: #f0f2ff;
+            border-left: 5px solid #6a3fb5;
+            border-radius: 10px;
+            padding: 1rem;
+            margin-top: 1rem;
+        }
+
+        .pulse-ring, .motion-box {
+            margin: 1rem auto;
+        }
+
+        .pulse-ring {
+            width: 20px;
+            height: 20px;
+            background-color: red;
+            border-radius: 50%;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 0.8; }
+            50% { transform: scale(1.05); opacity: 1; }
+        }
+
+        .motion-box {
+            width: 50px;
+            height: 50px;
+            background: #6a3fb5;
+            animation: shake 0.5s infinite;
+            border-radius: 10px;
+        }
+
+        @keyframes shake {
+            0% { transform: translate(0px, 0px); }
+            25% { transform: translate(2px, -2px); }
+            50% { transform: translate(-2px, 2px); }
+            75% { transform: translate(2px, 2px); }
+            100% { transform: translate(0px, 0px); }
+        }
+
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 2rem;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .button {
+            padding: 0.6rem 1.2rem;
+            border: none;
+            border-radius: 8px;
+            background-color: #6a3fb5;
+            color: white;
+            cursor: pointer;
+            font-weight: bold;
+            transition: 0.3s;
+        }
+
+        .button:hover {
+            background-color: #2a34a3;
+        }
+
+        @media (max-width: 768px) {
+            .flex-row { flex-direction: column; }
+            .controls { flex-direction: column; }
+        }
+
+        #chart-container {
+            margin-top: 2rem;
+            background: #f9f9f9;
+            padding: 1rem;
+            border-radius: 10px;
+            border: 1px solid #eee;
+            height: 300px;
+        }
+
+        #healthChart {
+            width: 100% !important;
+            height: 100% !important;
+        }
+
+        /* New styles for prediction text coloring */
+        .normal { color: #28a745; } /* Green */
+        .fall { color: #5d4603; }   /* Orange/Yellow */
+        .seizure { color: #dc3545; } /* Red */
+        .unknown { color: #6c757d; } /* Grey for "Waiting..." or "Unknown" */
+    </style>
+</head>
+
+<body>
+    <div class="topbar">
+        <div class="topbar-left">
+            <img src="{{ url_for('static', filename='logo.png') }}" alt="Wristly Logo" />
+            Wristly Monitoring Dashboard
+        </div>
+        <div class="status">Status: <span>Connected</span></div>
+    </div>
+
+    <div class="container">
+        <h1>Wristly</h1>
+
+        <div class="flex-row">
+            <div class="card">
+                <div class="card-title">Heart Rate</div>
+                <div class="value" id="heartRate">-- bpm</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Oxygen</div>
+                <div class="value" id="oxygen-value">-- %</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Temperature</div>
+                <div class="value" id="temp-value">-- °C</div>
+            </div>
+        </div>
+
+        <div id="chart-container">
+            <canvas id="healthChart"></canvas>
+        </div>
+
+        <div class="coordinates">
+            <strong>Motion (XYZ):</strong>
+            <div>X: <span id="x-val">--</span></div>
+            <div>Y: <span id="y-val">--</span></div>
+            <div>Z: <span id="z-val">--</span></div>
+        </div>
+
+        <div class="card" style="margin-top: 1rem; background-color:#e0e7ff;">
+            <div class="card-title">AI Prediction</div>
+            <div class="value" id="prediction-value">Waiting for data...</div>
+        </div>
+        
+        <div class="card" style="margin-top: 1rem; background-color:#fefbe8;">
+            <div class="card-title">Data reading count</div>
+            <div class="value" id="buffer_length">0</div>
+        </div>
+
+        <div class="flex-row" style="margin-top: 1rem;">
+            <div class="card" style="text-align: center;">
+                <div class="pulse-ring"></div>
+                <small>Pulse Detected</small>
+            </div>
+
+            <div class="card" style="text-align: center;">
+                <div class="motion-box"></div>
+                <small>Motion Activity</small>
+            </div>
+        </div>
+
+        <div style="margin-top: 2rem; background: #fdf6e3; padding: 1rem; border-left: 5px solid orange; border-radius: 10px;">
+            <strong>AI Analysis in Progress</strong>
+            <p style="margin: 0.5rem 0 0;">Machine learning will predict seizures &amp; falls from real-time data.</p>
+        </div>
+
+        <div class="container" style="margin-top: 2rem;">
+            <h2>User Feedback</h2>
+            <form id="feedbackForm">
+                <label for="userName">Name:</label>
+                <input type="text" id="userName" name="userName" required>
+                
+                <label for="userEmail">Email:</label>
+                <input type="email" id="userEmail" name="userEmail" required>
+                
+                <label for="userFeedback">Feedback:</label>
+                <textarea id="userFeedback" name="userFeedback" required></textarea>
+                
+                <label for="rating">Rating:</label>
+                <select id="rating" name="rating">
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                    <option value="4">4</option>
+                    <option value="5">5</option>
+                </select>
+                
+                <button type="submit" class="button">Submit Feedback</button>
+            </form>
+            <div id="feedbackMessage" style="margin-top: 1rem;"></div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+
+    <script>
+        const socket = io();
+
+        const chartLabels = [];
+        const heartRateData = [];
+        const oxygenData = [];
+        const tempData = [];
+
+        const ctx = document.getElementById('healthChart').getContext('2d');
+        const healthChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: chartLabels,
+                datasets: [
+                    {
+                        label: 'Heart Rate (bpm)',
+                        data: heartRateData,
+                        borderColor: '#6a3fb5',
+                        backgroundColor: 'rgba(106, 63, 181, 0.2)',
+                        fill: true,
+                        tension: 0.3
+                    },
+                    {
+                        label: 'Oxygen (%)',
+                        data: oxygenData,
+                        borderColor: '#ff6384',
+                        backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                        fill: true,
+                        tension: 0.3
+                    },
+                    {
+                        label: 'Temperature (°C)',
+                        data: tempData,
+                        borderColor: '#36a2eb',
+                        backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                        fill: true,
+                        tension: 0.3
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: { duration: 500 },
+                scales: {
+                    y: {
+                        beginAtZero: false
+                    }
+                }
+            }
+        });
+
+        socket.on('mqtt_data', (data) => {
+            console.log('📦 Received MQTT data from server:', data);
+
+            const time = new Date().toLocaleTimeString();
+
+            // Update chart data
+            chartLabels.push(time);
+            heartRateData.push(data.heartRate);
+            oxygenData.push(data.spo2);
+            tempData.push(data.temperatureC);
+
+            if (chartLabels.length > 20) {
+                chartLabels.shift();
+                heartRateData.shift();
+                oxygenData.shift();
+                tempData.shift();
+            }
+
+            healthChart.update();
+
+            // Update individual sensor values
+            document.getElementById('heartRate').textContent = (data.heartRate !== undefined && data.heartRate !== -1) ? data.heartRate + ' bpm' : '-- bpm';
+            document.getElementById('oxygen-value').textContent = (data.spo2 !== undefined && data.spo2 !== -1) ? data.spo2 + ' %' : '-- %';
+            document.getElementById('temp-value').textContent = (data.temperatureC !== undefined && data.temperatureC !== 0) ? data.temperatureC.toFixed(1) + ' °C' : '-- °C';
+
+            document.getElementById('x-val').textContent = (data.accelX !== undefined) ? data.accelX.toFixed(2) : '--';
+            document.getElementById('y-val').textContent = (data.accelY !== undefined) ? data.accelY.toFixed(2) : '--';
+            document.getElementById('z-val').textContent = (data.accelZ !== undefined) ? data.accelZ.toFixed(2) : '--';
+
+            // Dynamic pulse animation based on heart rate
+            const heartRate = data.heartRate || 70;
+            const pulseDuration = Math.max(0.3, 60 / heartRate); // faster BPM = faster animation
+            document.querySelector('.pulse-ring').style.animationDuration = pulseDuration + 's';
+
+            if (data.heartRate > 0) { 
+                document.querySelector('.pulse-ring').style.animationPlayState  = "running"; 
+            } 
+            else { document.querySelector('.pulse-ring').style.animationPlayState = "paused"; 
+            }
+
+        
+            // Dynamic motion based on accelerometer
+            const accelX = Math.abs(data.accelX || 0);
+            const accelY = Math.abs(data.accelY || 0);
+            const accelZ = Math.abs(data.accelZ || 0);
+            const totalMotion = accelX + accelY + accelZ;
+
+            const motionBox = document.querySelector('.motion-box');
+            if (totalMotion > 10.5) {
+            // Strong movement
+                motionBox.style.animationDuration = '0.2s';
+                motionBox.style.backgroundColor = '#e74c3c'; // red
+            } else if (totalMotion > 9.5) {
+            // Mild movement
+                motionBox.style.animationDuration = '0.4s';
+                motionBox.style.backgroundColor = '#f39c12'; // orange
+            } else {
+             // Nearly still
+                motionBox.style.animationDuration = '2s';
+                motionBox.style.backgroundColor = '#28a745'; // green
+            }
+
+            if (totalMotion > 0){
+                document.querySelector('.motion-box').style.animationPlayState  = "running";
+            } else {
+                document.querySelector('.motion-box').style.animationPlayState  = "paused";
+            }
+
+
+            // IMPORTANT: Update AI prediction display
+            const predictionValueElement = document.getElementById('prediction-value');
+            if (predictionValueElement && data.prediction !== undefined) {
+                predictionValueElement.textContent = data.prediction;
+                // Add class for styling based on prediction
+                predictionValueElement.className = 'value ' + data.prediction.toLowerCase();
+            }
+            
+            // Update buffer length display (for debugging)
+            document.getElementById('buffer_length').textContent = data.buffer_length !== undefined ? data.buffer_length : '0';
+
+        });
+
+        document.getElementById('feedbackForm').addEventListener('submit', function(event) {
+            event.preventDefault();
+            const feedbackData = {
+                name: document.getElementById('userName').value,
+                email: document.getElementById('userEmail').value,
+                feedback: document.getElementById('userFeedback').value,
+                rating: document.getElementById('rating').value
+            };
+
+            fetch('/submit_feedback', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(feedbackData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('feedbackMessage').textContent = data.message;
+                document.getElementById('feedbackForm').reset(); // Reset the form
+            })
+            .catch(error => console.error('Error:', error));
+        });
+
+        function downloadReport() {
+            const csv = [
+                'Metric,Value',
+                `Heart Rate,${document.getElementById('heartRate').textContent}`,
+                `Oxygen,${document.getElementById('oxygen-value').textContent}`,
+                `Temperature,${document.getElementById('temp-value').textContent}`,
+                `X,${document.getElementById('x-val').textContent}`,
+                `Y,${document.getElementById('y-val').textContent}`,
+                `Z,${document.getElementById('z-val').textContent}`,
+                // Ensure the prediction value is included here too
+                `AI Prediction,${document.getElementById('prediction-value').textContent}`
+            ].join('\n');
+
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'wristly_health_report.csv';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>
