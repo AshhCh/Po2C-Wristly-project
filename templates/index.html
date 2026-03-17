@@ -189,6 +189,14 @@
     <div class="container">
         <h1>Wristly</h1>
 
+<div style="text-align: center; margin-bottom: 1rem;">
+    <label style="font-weight: bold; margin-right: 0.5rem;">Select Patient:</label>
+    <select id="patientSelector" onchange="switchPatient()" style="padding: 0.5rem; border-radius: 8px; border: 1px solid #6a3fb5; color: #6a3fb5; font-weight: bold;">
+        <option value="patient1">Patient 1</option>
+        <option value="patient2">Patient 2</option>
+        <option value="patient3">Patient 3</option>
+    </select>
+</div>
         <div class="flex-row">
             <div class="card">
                 <div class="card-title">Heart Rate</div>
@@ -273,6 +281,7 @@
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 
     <script>
+        let currentPatient = 'patient1';
         const socket = io();
 
         const chartLabels = [];
@@ -324,8 +333,9 @@
             }
         });
 
-        socket.on('mqtt_data', (data) => {
-            console.log('📦 Received MQTT data from server:', data);
+    socket.on('mqtt_data', (data) => {
+        if (data.patient_id !== currentPatient) return; 
+        console.log('📦 Received MQTT data from server:', data);
 
             const time = new Date().toLocaleTimeString();
 
@@ -451,6 +461,18 @@
             a.click();
             URL.revokeObjectURL(url);
         }
+
+    function switchPatient() {
+    currentPatient = document.getElementById('patientSelector').value;
+    // Clear the chart when switching patients
+    chartLabels.length = 0;
+    heartRateData.length = 0;
+    oxygenData.length = 0;
+    tempData.length = 0;
+    healthChart.update();
+    console.log(`Switched to ${currentPatient}`);
+}
     </script>
+
 </body>
 </html>

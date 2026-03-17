@@ -26,6 +26,14 @@ app.config['MAIL_DEFAULT_SENDER'] = 'teamzsa2025@gmail.com'  # Default sender
 
 mail = Mail(app)
 
+# Instead of one topic, Multiple patiens are defined, each with their own topic and data buffer
+PATIENTS = ['patient1', 'patient2', 'patient3']
+MQTT_TOPIC_BASE = 'zsa/sensor'
+
+# Separate data storage for each patient to avoid overwriting and ensure accurate predictions
+patient_data = {p: None for p in PATIENTS}
+patient_buffers = {p: deque(maxlen=5) for p in PATIENTS}
+
 MQTT_BROKER = 'broker.hivemq.com'
 MQTT_PORT = 1883
 MQTT_TOPIC = 'zsa/sensor/data'
@@ -63,20 +71,27 @@ def send_email(subject, recipient, body):
     with app.app_context():
         mail.send(msg)
 
-# MQTT callbacks
+# MQTT callbacks UPDATED FOR MULTIPLE PATIENTS
 def on_connect(client, userdata, flags, rc):
     print("✅ MQTT connected with result code", rc)
-    client.subscribe(MQTT_TOPIC)
+    for patient in PATIENTS:
+        client.subscribe(f"{MQTT_TOPIC_BASE}/{patient}")
+        print(f"📡 Subscribed to {MQTT_TOPIC_BASE}/{patient}")
 
 def on_message(client, userdata, msg):
-    global latest_data, userEmail  # Include userEmail in the global variables
+    global patient_data
     try:
+        # Figure out which patient this data belongs to
+        patient_id = msg.topic.split('/')[-1]
         data = json.loads(msg.payload.decode('utf-8'))
-        print("📦 Received MQTT:", data)
-        latest_data = data
-        sensor_data_buffer.append(data)
-
-        prediction_label = "Waiting for data window..."
+        data['patient_id'] = patient_id
+        patient_data[patient_id] = data
+        patient_buffers[patient_id].append(data)
+        
+        socketio.emit('mqtt_data', data)
+        print(f"📦 Received data for {patient_id}: {data}")
+    except Exception as e:
+        print(f"🚫 MQTT message error: {e}")
 
         if model and scaler and len(sensor_data_buffer) == sensor_data_buffer.maxlen:
             heart_rates = np.array([d.get('heartRate', 0) for d in sensor_data_buffer])
