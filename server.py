@@ -24,6 +24,11 @@ MQTT_ALERT_TOPIC = 'zsa/sensor/alerts'
 MQTT_BROKER = 'broker.hivemq.com'
 MQTT_PORT = 1883
 MQTT_TOPIC = 'zsa/sensor/data'
+PATIENTS = ['patient1', 'patient2', 'patient3']
+MQTT_TOPIC_BASE = 'zsa/sensor'
+
+patient_data = {p: None for p in PATIENTS}
+patient_buffers = {p: deque(maxlen=5) for p in PATIENTS}
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'wristly-secret'          # FIXED: SocketIO requires a secret key
@@ -74,8 +79,10 @@ def send_email(subject, recipient, body):
 def on_connect(client, userdata, flags, rc):
     if rc == 0:
         print("✅ MQTT verbonden")
-        client.subscribe(MQTT_TOPIC)
         client.subscribe(MQTT_ALERT_TOPIC)
+        for patient in PATIENTS:
+            client.subscribe(f"{MQTT_TOPIC_BASE}/{patient}")
+            print(f"📡 Subscribed to {MQTT_TOPIC_BASE}/{patient}")
     else:
         print(f"❌ MQTT verbinding mislukt, code: {rc}")
 
@@ -85,6 +92,8 @@ def on_message(client, userdata, msg):
     try:
         topic = msg.topic
         data = json.loads(msg.payload.decode('utf-8'))
+        patient_id = topic.split('/')[-1]
+        data['patient_id'] = patient_id
 
         # --- ALERT topic ---
         if topic == MQTT_ALERT_TOPIC:

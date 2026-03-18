@@ -97,6 +97,7 @@
             border-radius: 50%;
             margin: 0 auto;
             animation: pulse 1s infinite;
+            animation-play-state: paused;
             box-shadow: 0 0 0 0 rgba(255, 0, 0, 0.4);
         }
         @keyframes pulse {
@@ -112,6 +113,7 @@
             border-radius: 10px;
             margin: 0 auto;
             animation: shake 0.5s infinite;
+            animation-play-state: paused;
         }
         @keyframes shake {
             0%   { transform: translate(0px, 0px) rotate(0deg); }
@@ -127,12 +129,24 @@
     <div id="alert-bar">🚨 KRITIEKE VAL GEDETECTEERD! 🚨</div>
 
     <div class="topbar">
-        <div><strong>Wristly Monitoring</strong></div>
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <img src="{{ url_for('static', filename='logo.png') }}" alt="Wristly Logo" style="height: 32px; width: 32px; object-fit: contain;" />
+            <strong>Wristly Monitoring</strong>
+        </div>
         <div id="status">Status: <span style="color:lightgreen">Online</span></div>
     </div>
 
     <div class="container">
         <h1 style="text-align:center">Live Dashboard</h1>
+
+        <div style="text-align: center; margin-bottom: 1rem;">
+    <label style="font-weight: bold; margin-right: 0.5rem;">Select Patient:</label>
+    <select id="patientSelector" onchange="switchPatient()" style="padding: 0.5rem; border-radius: 8px; border: 1px solid #6a3fb5; color: #6a3fb5; font-weight: bold;">
+        <option value="patient1">Patient 1</option>
+        <option value="patient2">Patient 2</option>
+        <option value="patient3">Patient 3</option>
+    </select>
+</div>
 
         <!-- Vitals cards -->
         <div class="flex-row">
@@ -178,11 +192,11 @@
         <div class="anim-row">
             <div class="anim-card">
                 <div class="pulse-ring"></div>
-                <small>❤️ Pulse Gedetecteerd</small>
+                <small>Pulse Gedetecteerd</small>
             </div>
             <div class="anim-card">
                 <div class="motion-box"></div>
-                <small>📳 Bewegingsactiviteit</small>
+                <small>Bewegingsactiviteit</small>
             </div>
         </div>
 
@@ -207,6 +221,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
     <script>
+        let currentPatient = 'patient1';
         const socket = io();
 
         const ctx = document.getElementById('healthChart').getContext('2d');
@@ -224,6 +239,7 @@
         });
 
         socket.on('mqtt_data', (data) => {
+            if (data.patient_id !== currentPatient) return;
             const time = new Date().toLocaleTimeString();
             if (healthChart.data.labels.length > 15) {
                 healthChart.data.labels.shift();
@@ -249,6 +265,38 @@
                 data.accelZ != null ? data.accelZ.toFixed(2) : '--';
             document.getElementById('prediction-value').textContent =
                 data.prediction || 'Wachten op data...';
+            // Pulse animation
+    const heartRate = data.heartRate || 70;
+    const pulseDuration = Math.max(0.3, 60 / heartRate);
+    document.querySelector('.pulse-ring').style.animationDuration = pulseDuration + 's';
+    if (data.heartRate > 0) {
+    document.querySelector('.pulse-ring').style.animationPlayState = "running";
+    } else {
+    document.querySelector('.pulse-ring').style.animationPlayState = "paused";
+    }
+
+    // Motion box animation
+    const accelX = Math.abs(data.accelX || 0);
+    const accelY = Math.abs(data.accelY || 0);
+    const accelZ = Math.abs(data.accelZ || 0);
+    const totalMotion = accelX + accelY + accelZ;
+
+    const motionBox = document.querySelector('.motion-box');
+          if (totalMotion > 10.5) {
+              motionBox.style.animationDuration = '0.2s';
+              motionBox.style.backgroundColor = '#e74c3c';
+        } else if (totalMotion > 9.5) {
+              motionBox.style.animationDuration = '0.4s';
+              motionBox.style.backgroundColor = '#f39c12';
+        } else {
+             motionBox.style.animationDuration = '2s';
+             motionBox.style.backgroundColor = '#28a745';
+        }
+        if (totalMotion > 0) {
+            motionBox.style.animationPlayState = "running";
+        } else {
+        motionBox.style.animationPlayState = "paused";
+     }
         });
 
         socket.on('alert', () => {
@@ -265,7 +313,7 @@
             document.getElementById('tab-' + name).classList.add('active');
         }
 
-        function submitFeedback() {
+         function submitFeedback() {
             const data = {
                 name: document.getElementById('userName').value,
                 email: document.getElementById('userEmail').value,
@@ -289,6 +337,14 @@
                 document.getElementById('feedbackMessage').textContent = "❌ Iets ging mis.";
             });
         }
+        
+        function switchPatient() {
+        currentPatient = document.getElementById('patientSelector').value;
+        healthChart.data.labels = [];
+        healthChart.data.datasets.forEach(d => d.data = []);
+        healthChart.update();
+        }
+
     </script>
 </body>
 </html>
