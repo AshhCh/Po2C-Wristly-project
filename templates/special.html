@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Wristly | Fall Logging</title>
+    <style>
+        body {
+            margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif;
+            background-color: #f3c7bd; color: #6a3fb5;
+        }
+        .topbar {
+            background-color: #6a3fb5; color: white; padding: 1rem 1.5rem;
+            text-align: center; font-weight: bold;
+        }
+        .container {
+            max-width: 800px; margin: 2rem auto; background-color: white;
+            padding: 2rem; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+        .log-entry {
+            border-bottom: 2px solid #f3c7bd; padding: 15px; display: flex;
+            justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;
+        }
+        .log-entry:last-child { border-bottom: none; }
+        .alert-text { color: red; font-weight: bold; font-size: 1.2rem; }
+        .time-text { color: #6a3fb5; }
+        .data-text { background: #6a3fb5; color: white; padding: 5px 10px; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <div class="topbar">WRISTLY EXTERNAL LOGGING SYSTEM</div>
+    <div class="container">
+        <h2 style="text-align: center;">Gedetecteerde Vallen</h2>
+        <div id="log-list">
+            <p id="no-data" style="text-align: center; opacity: 0.6;">Nog geen incidenten geregistreerd...</p>
+        </div>
+    </div>
+
+    <!-- FIXED: Use relative URL so it always connects to the same server -->
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+    <script>
+        // FIXED: Connect to the same origin (no hardcoded URL needed)
+        const socket = io();
+        const logList = document.getElementById('log-list');
+        let noDataMsg = document.getElementById('no-data');
+
+        socket.on('fall_log', (data) => {
+            // Remove the placeholder text on first entry
+            if (noDataMsg) {
+                noDataMsg.remove();
+                noDataMsg = null;
+            }
+
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.innerHTML = `
+                <span class="alert-text">🚨 VAL GEDETECTEERD</span>
+                <span class="time-text">Tijd: <strong>${data.timestamp}</strong></span>
+                <span class="data-text">SpO2: ${data.spo2}%</span>
+            `;
+            // Newest alert at the top
+            logList.insertBefore(entry, logList.firstChild);
+        });
+
+        socket.on('connect', () => console.log('✅ Verbonden met server'));
+        socket.on('disconnect', () => console.log('❌ Verbinding verbroken'));
+    </script>
+</body>
+</html>

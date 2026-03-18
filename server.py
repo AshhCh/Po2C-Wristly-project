@@ -1,181 +1,182 @@
+import eventlet
+eventlet.monkey_patch()
+
 from flask import Flask, render_template, request, jsonify
 from flask_socketio import SocketIO
 from flask_mail import Mail, Message
 import threading
 import json
 import paho.mqtt.client as mqtt
-import tensorflow as tf
 import numpy as np
 import pickle
 from collections import deque
+from datetime import datetime
 
-from dotenv import load_dotenv
-import os
-load_dotenv()
+# --- Try to import TensorFlow, fall back gracefully ---
+try:
+    import tensorflow as tf
+    TF_AVAILABLE = True
+except ImportError:
+    TF_AVAILABLE = False
+    print("⚠️  TensorFlow niet gevonden, AI-voorspelling uitgeschakeld.")
 
-app = Flask(__name__)
-socketio = SocketIO(app, cors_allowed_origins="*")
-
-# Configure Flask-Mail
-app.config['MAIL_SERVER'] = 'smtp.gmail.com'
-app.config['MAIL_PORT'] = 587
-app.config['MAIL_USE_TLS'] = True
-app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME')
-app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD')
-app.config['MAIL_DEFAULT_SENDER'] = 'teamzsa2025@gmail.com'  # Default sender
-
-mail = Mail(app)
-
-# Instead of one topic, Multiple patiens are defined, each with their own topic and data buffer
-PATIENTS = ['patient1', 'patient2', 'patient3']
-MQTT_TOPIC_BASE = 'zsa/sensor'
-
-# Separate data storage for each patient to avoid overwriting and ensure accurate predictions
-patient_data = {p: None for p in PATIENTS}
-patient_buffers = {p: deque(maxlen=5) for p in PATIENTS}
-
+MQTT_ALERT_TOPIC = 'zsa/sensor/alerts'
 MQTT_BROKER = 'broker.hivemq.com'
 MQTT_PORT = 1883
 MQTT_TOPIC = 'zsa/sensor/data'
 
+app = Flask(__name__)
+app.config['SECRET_KEY'] = 'wristly-secret'          # FIXED: SocketIO requires a secret key
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
+
+# --- Flask-Mail ---
+app.config['MAIL_SERVER'] = 'smtp.gmail.com'
+app.config['MAIL_PORT'] = 587
+app.config['MAIL_USE_TLS'] = True
+app.config['MAIL_USERNAME'] = 'teamzsa2025@gmail.com'
+app.config['MAIL_PASSWORD'] = ''   # Fill in your app password
+app.config['MAIL_DEFAULT_SENDER'] = 'teamzsa2025@gmail.com'
+mail = Mail(app)
+
 latest_data = None
 sensor_data_buffer = deque(maxlen=5)
-userEmail = ''  # Global variable to store user email
+userEmail = ''
 
-# --- AI Model and Scaler Loading ---
+# --- AI Model ---
 model = None
 scaler = None
 label_mapping = {}
 
-try:
-    model = tf.keras.models.load_model('my_model.h5')
-    with open('scaler.pkl', 'rb') as f:
-        scaler = pickle.load(f)
-    print("✅ AI Model and StandardScaler loaded successfully!")
+if TF_AVAILABLE:
+    try:
+        model = tf.keras.models.load_model('my_model.h5')
+        with open('scaler.pkl', 'rb') as f:
+            scaler = pickle.load(f)
+        with open('label_map.json', 'r') as f:
+            raw_label_map = json.load(f)
+            label_mapping = {int(k): v for k, v in raw_label_map.items()}
+        print("✅ AI Model en Scaler succesvol geladen!")
+    except Exception as e:
+        print(f"⚠️  AI niet geladen (model-bestanden ontbreken?): {e}")
 
-    with open('label_map.json', 'r') as f:
-        raw_label_map = json.load(f)
-        label_mapping = {int(k): v for k, v in raw_label_map.items()}
-    print(f"✅ Label map loaded: {label_mapping}")
 
-except Exception as e:
-    print(f"🚫 Error loading AI Model, StandardScaler, or Label Map: {e}")
-    model = None
-    scaler = None
-    label_mapping = {}
-
-# Email sending function
 def send_email(subject, recipient, body):
-    msg = Message(subject, recipients=[recipient])
-    msg.body = body
-    with app.app_context():
-        mail.send(msg)
+    try:
+        msg = Message(subject, recipients=[recipient])
+        msg.body = body
+        with app.app_context():
+            mail.send(msg)
+        print(f"📧 Mail verstuurd naar {recipient}")
+    except Exception as e:
+        print(f"📧 Mail fout: {e}")
 
-# MQTT callbacks UPDATED FOR MULTIPLE PATIENTS
+
 def on_connect(client, userdata, flags, rc):
-    print("✅ MQTT connected with result code", rc)
-    for patient in PATIENTS:
-        client.subscribe(f"{MQTT_TOPIC_BASE}/{patient}")
-        print(f"📡 Subscribed to {MQTT_TOPIC_BASE}/{patient}")
+    if rc == 0:
+        print("✅ MQTT verbonden")
+        client.subscribe(MQTT_TOPIC)
+        client.subscribe(MQTT_ALERT_TOPIC)
+    else:
+        print(f"❌ MQTT verbinding mislukt, code: {rc}")
+
 
 def on_message(client, userdata, msg):
-    global patient_data
+    global latest_data, userEmail
     try:
-        # Figure out which patient this data belongs to
-        patient_id = msg.topic.split('/')[-1]
+        topic = msg.topic
         data = json.loads(msg.payload.decode('utf-8'))
-        data['patient_id'] = patient_id
-        patient_data[patient_id] = data
-        patient_buffers[patient_id].append(data)
-        
-        socketio.emit('mqtt_data', data)
-        print(f"📦 Received data for {patient_id}: {data}")
-    except Exception as e:
-        print(f"🚫 MQTT message error: {e}")
+
+        # --- ALERT topic ---
+        if topic == MQTT_ALERT_TOPIC:
+            print("🚨 VAL GEDETECTEERD:", data)
+            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            spo2 = data.get('spo2', '--')
+
+            # Emit alert to main dashboard
+            socketio.emit('alert', {"status": "FALL_DETECTED"})
+
+            # FIXED: Emit fall_log so special.html also receives it
+            socketio.emit('fall_log', {
+                "timestamp": timestamp,
+                "spo2": spo2
+            })
+
+            if userEmail:
+                send_email(
+                    "🚨 VAL GEDETECTEERD!",
+                    userEmail,
+                    f"Er is een val gedetecteerd op: {timestamp}\nSpO2 op moment van val: {spo2}%"
+                )
+            return
+
+        # --- Normal sensor data ---
+        latest_data = data
+        sensor_data_buffer.append(data)
+        prediction_label = "Buffer vullen..."
 
         if model and scaler and len(sensor_data_buffer) == sensor_data_buffer.maxlen:
-            heart_rates = np.array([d.get('heartRate', 0) for d in sensor_data_buffer])
-            accel_x_values = np.array([d.get('accelX', 0) for d in sensor_data_buffer])
-            accel_y_values = np.array([d.get('accelY', 0) for d in sensor_data_buffer])
-            accel_z_values = np.array([d.get('accelZ', 0) for d in sensor_data_buffer])
+            hr = np.array([d.get('heartRate', 0) for d in sensor_data_buffer])
+            ax = np.array([d.get('accelX', 0) for d in sensor_data_buffer])
+            ay = np.array([d.get('accelY', 0) for d in sensor_data_buffer])
+            az = np.array([d.get('accelZ', 0) for d in sensor_data_buffer])
 
-            heart_mean = np.mean(heart_rates)
-            heart_std = np.std(heart_rates)
-            accel_x_mean = np.mean(accel_x_values)
-            accel_y_mean = np.mean(accel_y_values)
-            accel_z_mean = np.mean(accel_z_values)
-            accel_x_std = np.std(accel_x_values)
-            accel_y_std = np.std(accel_y_values)
-            accel_z_std = np.std(accel_z_values)
-
-            features_for_prediction = np.array([
-                heart_mean, heart_std,
-                accel_x_mean, accel_y_mean, accel_z_mean,
-                accel_x_std, accel_y_std, accel_z_std
+            features = np.array([
+                np.mean(hr), np.std(hr),
+                np.mean(ax), np.mean(ay), np.mean(az),
+                np.std(ax), np.std(ay), np.std(az)
             ]).reshape(1, -1)
 
-            scaled_features = scaler.transform(features_for_prediction)
-            prediction_prob = model.predict(scaled_features)[0]
-            prediction_class = np.argmax(prediction_prob)
-            prediction_label = label_mapping.get(prediction_class, "Unknown Prediction")
-
-            # Check for fall or seizure predictions
-            if prediction_label in ['fall', 'seizure'] and userEmail:
-                send_email(
-                    subject=f"Alert: {prediction_label.capitalize()} Detected!",
-                    recipient=userEmail,  # Use the captured email address
-                    body=f"A {prediction_label} has been detected based on the latest sensor data."
-                )
-
-            print(f"🤖 Prediction: Probabilities={prediction_prob}, Class={prediction_class}, Label={prediction_label}")
-        else:
-            print("AI model or scaler not loaded or buffer not full, skipping prediction.")
-            if not model or not scaler:
-                sensor_data_buffer.clear()
+            scaled = scaler.transform(features)
+            prediction_prob = model.predict(scaled)[0]
+            prediction_label = label_mapping.get(np.argmax(prediction_prob), "Onbekend")
 
         data['prediction'] = prediction_label
         data['buffer_length'] = len(sensor_data_buffer)
-
-        print(f"DEBUG: Data dictionary before emitting: {data}")
+        print(f"📤 Emitting mqtt_data to browser: HR={data.get('heartRate')}")
         socketio.emit('mqtt_data', data)
+        print(f"✅ Emit done")
+
     except Exception as e:
-        print(f"🚫 MQTT message error: {e}")
-        socketio.emit('mqtt_error', {'message': str(e), 'raw_data': msg.payload.decode('utf-8')})
+        print(f"🚫 MQTT Fout: {e}")
 
-@socketio.on('connect')
-def handle_connect():
-    print("🔌 Browser connected via SocketIO")
-    if latest_data:
-        temp_data = latest_data.copy()
-        temp_data['prediction'] = "Waiting for data window..."
-        temp_data['buffer_length'] = len(sensor_data_buffer)
-        print("📤 Sending cached data to client")
-        socketio.emit('mqtt_data', temp_data)
 
+# --- Routes ---
 @app.route('/')
 def index():
     return render_template('index.html')
 
+# FIXED: Added route for special.html
+@app.route('/special')
+def special():
+    return render_template('special.html')
+
 @app.route('/submit_feedback', methods=['POST'])
 def submit_feedback():
-    feedback_data = request.json
-    name = feedback_data.get('name')
-    global userEmail  # Use the global variable to store the email
-    userEmail = feedback_data.get('email')  # Get the email address
-    feedback = feedback_data.get('feedback')
-    rating = feedback_data.get('rating')
-
-    # Save feedback to a text file
+    fb = request.json
+    global userEmail
+    userEmail = fb.get('email', '')
     with open('feedback.txt', 'a') as f:
-        f.write(f"Name: {name}, Email: {userEmail}, Feedback: {feedback}, Rating: {rating}\n")
+        f.write(
+            f"Naam: {fb.get('name')}, Email: {userEmail}, "
+            f"Feedback: {fb.get('feedback')}, Rating: {fb.get('rating')}\n"
+        )
+    return jsonify({"message": "Bedankt!"}), 200
 
-    return jsonify({"message": "Thank you for your feedback!"}), 200
 
 if __name__ == '__main__':
     mqtt_client = mqtt.Client()
     mqtt_client.on_connect = on_connect
     mqtt_client.on_message = on_message
-    mqtt_client.connect(MQTT_BROKER, MQTT_PORT, 60)
 
-    threading.Thread(target=mqtt_client.loop_forever, daemon=True).start()
+    try:
+        mqtt_client.connect(MQTT_BROKER, MQTT_PORT, 60)
+        threading.Thread(target=mqtt_client.loop_forever, daemon=True).start()
+        print("✅ MQTT thread gestart")
+    except Exception as e:
+        print(f"⚠️  MQTT verbinding mislukt: {e} — server start toch.")
+
+    print("🌐 Server draait op: http://localhost:8000")
+    print("📊 Dashboard:    http://localhost:8000/")
+    print("📋 Val logging:  http://localhost:8000/special")
+    print("🔴 Stop met:     Ctrl+C")
     socketio.run(app, debug=False, host='0.0.0.0', port=8000)

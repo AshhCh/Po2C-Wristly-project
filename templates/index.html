@@ -2,477 +2,293 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8" />
-    <title>Wristly</title>
+    <title>Wristly Dashboard</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <style>
-        /* [unchanged styles...] */
-        body {
-            margin: 0;
-            padding: 0;
-            font-family: 'Segoe UI', sans-serif;
-            background-color: #f3c7bd;
-            color: #6a3fb5;
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+        body { margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; background-color: #f3c7bd; color: #6a3fb5; }
+
+        .topbar { background-color: #6a3fb5; color: white; padding: 1rem 1.5rem; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
+
+        #alert-bar {
+            display: none;
+            background-color: red;
+            color: white;
+            padding: 1.5rem;
+            text-align: center;
+            font-weight: bold;
+            font-size: 20px;
+            animation: blink 1s infinite;
+            position: fixed;
+            top: 0; left: 0; width: 100%;
+            z-index: 999;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
         }
 
-        .topbar {
+        .container { max-width: 1000px; margin: 2rem auto; background-color: white; padding: 2rem; border-radius: 20px; box-shadow: 0 10px 30px rgba(50, 64, 196, 0.2); }
+        .flex-row { display: flex; flex-wrap: wrap; gap: 1rem; justify-content: space-between; }
+        .card { flex: 1; min-width: 220px; background-color: #f9f9f9; border-radius: 10px; padding: 1rem; border: 1px solid #eee; }
+        .value { color: #000; font-size: 1.2rem; font-weight: bold; }
+        #chart-container { margin-top: 2rem; background: #f9f9f9; padding: 1rem; border-radius: 10px; height: 300px; }
+        .button { padding: 0.8rem; border: none; border-radius: 8px; background-color: #6a3fb5; color: white; cursor: pointer; font-weight: bold; width: 100%; margin-top: 10px; }
+        input, textarea, select { width: 100%; padding: 8px; margin: 5px 0 15px; border-radius: 5px; border: 1px solid #ccc; box-sizing: border-box; }
+
+        /* ── XYZ Squares ── */
+        .xyz-section { margin-top: 1.5rem; }
+        .xyz-label { font-weight: bold; color: #6a3fb5; margin-bottom: 0.75rem; font-size: 1rem; }
+        .xyz-squares { display: flex; gap: 1rem; flex-wrap: wrap; }
+        .xyz-box {
+            flex: 1;
+            min-width: 100px;
             background-color: #6a3fb5;
             color: white;
-            padding: 1rem 1.5rem;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            position: sticky;
-            top: 0;
-        }
-
-        .topbar-left {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            font-weight: bold;
-            font-size: 1.2rem;
-        }
-
-        .topbar-left img {
-            height: 32px;
-            width: 32px;
-            object-fit: contain;
-        }
-
-        .status span {
-            color: lightgreen;
-            font-weight: bold;
-        }
-
-        .container {
-
-            max-width: 1000px;
-            margin: 2rem auto;
-            background-color: white;
-            padding: 2rem;
-            border-radius: 20px;
-            box-shadow: 0 10px 30px rgba(50, 64, 196, 0.2);
-        }
-
-        h1 {
+            border-radius: 12px;
+            padding: 1.2rem 1rem;
             text-align: center;
+            box-shadow: 0 4px 12px rgba(106, 63, 181, 0.3);
+        }
+        .xyz-box .axis-label { font-size: 0.85rem; opacity: 0.85; margin-bottom: 0.4rem; letter-spacing: 1px; text-transform: uppercase; }
+        .xyz-box .axis-value { font-size: 1.5rem; font-weight: bold; }
+
+        /* ── AI Tab ── */
+        .ai-tab-wrapper { margin-top: 1.5rem; }
+        .tab-header { display: flex; gap: 0; }
+        .tab-btn {
+            padding: 0.6rem 1.4rem;
+            background-color: #e0e7ff;
             color: #6a3fb5;
-            margin-bottom: 2rem;
+            border: none;
+            border-radius: 10px 10px 0 0;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 0.95rem;
+            opacity: 0.6;
+            transition: opacity 0.2s;
         }
-
-        .flex-row {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 1rem;
-            justify-content: space-between;
+        .tab-btn.active { background-color: #6a3fb5; color: white; opacity: 1; }
+        .tab-content {
+            background-color: #e0e7ff;
+            border-radius: 0 12px 12px 12px;
+            padding: 1.2rem 1.5rem;
+            display: none;
         }
+        .tab-content.active { display: block; }
+        .ai-status-label { font-size: 0.85rem; color: #6a3fb5; opacity: 0.7; margin-bottom: 0.3rem; }
+        .ai-result { font-size: 1.4rem; font-weight: bold; color: #3a1f80; }
 
-        .card {
+        /* ── Pulse & Motion animations ── */
+        .anim-row { display: flex; flex-wrap: wrap; gap: 1rem; margin-top: 1.5rem; }
+        .anim-card {
             flex: 1;
-            min-width: 220px;
+            min-width: 160px;
             background-color: #f9f9f9;
-            border-radius: 10px;
-            padding: 1rem;
+            border-radius: 12px;
+            padding: 1.2rem 1rem;
+            text-align: center;
             border: 1px solid #eee;
         }
-
-        .card-title {
-            font-weight: bold;
-            margin-bottom: 0.5rem;
-        }
-
-        .value {
-            color: #000;
-            font-size: 1.2rem;
-        }
-
-        .coordinates {
-            background-color: #f0f2ff;
-            border-left: 5px solid #6a3fb5;
-            border-radius: 10px;
-            padding: 1rem;
-            margin-top: 1rem;
-        }
-
-        .pulse-ring, .motion-box {
-            margin: 1rem auto;
-        }
+        .anim-card small { display: block; margin-top: 0.6rem; color: #6a3fb5; font-weight: bold; font-size: 0.85rem; }
 
         .pulse-ring {
-            width: 20px;
-            height: 20px;
+            width: 28px;
+            height: 28px;
             background-color: red;
             border-radius: 50%;
+            margin: 0 auto;
             animation: pulse 1s infinite;
+            box-shadow: 0 0 0 0 rgba(255, 0, 0, 0.4);
         }
-
         @keyframes pulse {
-            0%, 100% { transform: scale(1); opacity: 0.8; }
-            50% { transform: scale(1.05); opacity: 1; }
+            0%   { transform: scale(1);    box-shadow: 0 0 0 0 rgba(255,0,0,0.4); }
+            70%  { transform: scale(1.15); box-shadow: 0 0 0 10px rgba(255,0,0,0); }
+            100% { transform: scale(1);    box-shadow: 0 0 0 0 rgba(255,0,0,0); }
         }
 
         .motion-box {
-            width: 50px;
-            height: 50px;
+            width: 40px;
+            height: 40px;
             background: #6a3fb5;
+            border-radius: 10px;
+            margin: 0 auto;
             animation: shake 0.5s infinite;
-            border-radius: 10px;
         }
-
         @keyframes shake {
-            0% { transform: translate(0px, 0px); }
-            25% { transform: translate(2px, -2px); }
-            50% { transform: translate(-2px, 2px); }
-            75% { transform: translate(2px, 2px); }
-            100% { transform: translate(0px, 0px); }
+            0%   { transform: translate(0px, 0px) rotate(0deg); }
+            25%  { transform: translate(3px, -3px) rotate(1deg); }
+            50%  { transform: translate(-3px, 3px) rotate(-1deg); }
+            75%  { transform: translate(3px, 3px) rotate(1deg); }
+            100% { transform: translate(0px, 0px) rotate(0deg); }
         }
-
-        .controls {
-            display: flex;
-            justify-content: space-between;
-            margin-top: 2rem;
-            flex-wrap: wrap;
-            gap: 1rem;
-        }
-
-        .button {
-            padding: 0.6rem 1.2rem;
-            border: none;
-            border-radius: 8px;
-            background-color: #6a3fb5;
-            color: white;
-            cursor: pointer;
-            font-weight: bold;
-            transition: 0.3s;
-        }
-
-        .button:hover {
-            background-color: #2a34a3;
-        }
-
-        @media (max-width: 768px) {
-            .flex-row { flex-direction: column; }
-            .controls { flex-direction: column; }
-        }
-
-        #chart-container {
-            margin-top: 2rem;
-            background: #f9f9f9;
-            padding: 1rem;
-            border-radius: 10px;
-            border: 1px solid #eee;
-            height: 300px;
-        }
-
-        #healthChart {
-            width: 100% !important;
-            height: 100% !important;
-        }
-
-        /* New styles for prediction text coloring */
-        .normal { color: #28a745; } /* Green */
-        .fall { color: #5d4603; }   /* Orange/Yellow */
-        .seizure { color: #dc3545; } /* Red */
-        .unknown { color: #6c757d; } /* Grey for "Waiting..." or "Unknown" */
     </style>
 </head>
-
 <body>
+
+    <div id="alert-bar">🚨 KRITIEKE VAL GEDETECTEERD! 🚨</div>
+
     <div class="topbar">
-        <div class="topbar-left">
-            <img src="{{ url_for('static', filename='logo.png') }}" alt="Wristly Logo" />
-            Wristly Monitoring Dashboard
-        </div>
-        <div class="status">Status: <span>Connected</span></div>
+        <div><strong>Wristly Monitoring</strong></div>
+        <div id="status">Status: <span style="color:lightgreen">Online</span></div>
     </div>
 
     <div class="container">
-        <h1>Wristly</h1>
+        <h1 style="text-align:center">Live Dashboard</h1>
 
-<div style="text-align: center; margin-bottom: 1rem;">
-    <label style="font-weight: bold; margin-right: 0.5rem;">Select Patient:</label>
-    <select id="patientSelector" onchange="switchPatient()" style="padding: 0.5rem; border-radius: 8px; border: 1px solid #6a3fb5; color: #6a3fb5; font-weight: bold;">
-        <option value="patient1">Patient 1</option>
-        <option value="patient2">Patient 2</option>
-        <option value="patient3">Patient 3</option>
-    </select>
-</div>
+        <!-- Vitals cards -->
         <div class="flex-row">
-            <div class="card">
-                <div class="card-title">Heart Rate</div>
-                <div class="value" id="heartRate">-- bpm</div>
+            <div class="card"><div>Hartslag</div><div class="value" id="heartRate">-- bpm</div></div>
+            <div class="card"><div>Zuurstof (SpO2)</div><div class="value" id="oxygen-value">-- %</div></div>
+            <div class="card"><div>Temperatuur</div><div class="value" id="temp-value">-- °C</div></div>
+        </div>
+
+        <!-- Chart -->
+        <div id="chart-container"><canvas id="healthChart"></canvas></div>
+
+        <!-- XYZ Squares -->
+        <div class="xyz-section">
+            <div class="xyz-label">📐 Bewegingsdata (G-kracht)</div>
+            <div class="xyz-squares">
+                <div class="xyz-box">
+                    <div class="axis-label">X-as</div>
+                    <div class="axis-value" id="x-val">--</div>
+                </div>
+                <div class="xyz-box">
+                    <div class="axis-label">Y-as</div>
+                    <div class="axis-value" id="y-val">--</div>
+                </div>
+                <div class="xyz-box">
+                    <div class="axis-label">Z-as</div>
+                    <div class="axis-value" id="z-val">--</div>
+                </div>
             </div>
-            <div class="card">
-                <div class="card-title">Oxygen</div>
-                <div class="value" id="oxygen-value">-- %</div>
+        </div>
+
+        <!-- AI Tab -->
+        <div class="ai-tab-wrapper">
+            <div class="tab-header">
+                <button class="tab-btn active" onclick="switchTab('ai')">🤖 AI Analyse</button>
             </div>
-            <div class="card">
-                <div class="card-title">Temperature</div>
-                <div class="value" id="temp-value">-- °C</div>
+            <div class="tab-content active" id="tab-ai">
+                <div class="ai-status-label">Huidige activiteitsherkenning</div>
+                <div class="ai-result" id="prediction-value">Wachten op data...</div>
             </div>
         </div>
 
-        <div id="chart-container">
-            <canvas id="healthChart"></canvas>
-        </div>
-
-        <div class="coordinates">
-            <strong>Motion (XYZ):</strong>
-            <div>X: <span id="x-val">--</span></div>
-            <div>Y: <span id="y-val">--</span></div>
-            <div>Z: <span id="z-val">--</span></div>
-        </div>
-
-        <div class="card" style="margin-top: 1rem; background-color:#e0e7ff;">
-            <div class="card-title">AI Prediction</div>
-            <div class="value" id="prediction-value">Waiting for data...</div>
-        </div>
-        
-        <div class="card" style="margin-top: 1rem; background-color:#fefbe8;">
-            <div class="card-title">Data reading count</div>
-            <div class="value" id="buffer_length">0</div>
-        </div>
-
-        <div class="flex-row" style="margin-top: 1rem;">
-            <div class="card" style="text-align: center;">
+        <!-- Pulse & Motion -->
+        <div class="anim-row">
+            <div class="anim-card">
                 <div class="pulse-ring"></div>
-                <small>Pulse Detected</small>
+                <small>❤️ Pulse Gedetecteerd</small>
             </div>
-
-            <div class="card" style="text-align: center;">
+            <div class="anim-card">
                 <div class="motion-box"></div>
-                <small>Motion Activity</small>
+                <small>📳 Bewegingsactiviteit</small>
             </div>
         </div>
 
-        <div style="margin-top: 2rem; background: #fdf6e3; padding: 1rem; border-left: 5px solid orange; border-radius: 10px;">
-            <strong>AI Analysis in Progress</strong>
-            <p style="margin: 0.5rem 0 0;">Machine learning will predict seizures &amp; falls from real-time data.</p>
-        </div>
-
-        <div class="container" style="margin-top: 2rem;">
-            <h2>User Feedback</h2>
-            <form id="feedbackForm">
-                <label for="userName">Name:</label>
-                <input type="text" id="userName" name="userName" required>
-                
-                <label for="userEmail">Email:</label>
-                <input type="email" id="userEmail" name="userEmail" required>
-                
-                <label for="userFeedback">Feedback:</label>
-                <textarea id="userFeedback" name="userFeedback" required></textarea>
-                
-                <label for="rating">Rating:</label>
-                <select id="rating" name="rating">
-                    <option value="1">1</option>
-                    <option value="2">2</option>
-                    <option value="3">3</option>
-                    <option value="4">4</option>
-                    <option value="5">5</option>
+        <!-- Feedback -->
+        <div class="container" style="margin-top: 2rem; border: 1px solid #eee;">
+            <h3>Feedback</h3>
+            <div id="feedbackForm">
+                <input type="text" id="userName" placeholder="Naam">
+                <input type="email" id="userEmail" placeholder="Email">
+                <textarea id="userFeedback" placeholder="Jouw feedback..."></textarea>
+                <select id="rating">
+                    <option value="5">5 Sterren</option>
+                    <option value="4">4 Sterren</option>
+                    <option value="3">3 Sterren</option>
                 </select>
-                
-                <button type="submit" class="button">Submit Feedback</button>
-            </form>
-            <div id="feedbackMessage" style="margin-top: 1rem;"></div>
+                <button class="button" onclick="submitFeedback()">Verstuur</button>
+            </div>
+            <div id="feedbackMessage"></div>
         </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
     <script>
-        let currentPatient = 'patient1';
         const socket = io();
-
-        const chartLabels = [];
-        const heartRateData = [];
-        const oxygenData = [];
-        const tempData = [];
 
         const ctx = document.getElementById('healthChart').getContext('2d');
         const healthChart = new Chart(ctx, {
             type: 'line',
             data: {
-                labels: chartLabels,
+                labels: [],
                 datasets: [
-                    {
-                        label: 'Heart Rate (bpm)',
-                        data: heartRateData,
-                        borderColor: '#6a3fb5',
-                        backgroundColor: 'rgba(106, 63, 181, 0.2)',
-                        fill: true,
-                        tension: 0.3
-                    },
-                    {
-                        label: 'Oxygen (%)',
-                        data: oxygenData,
-                        borderColor: '#ff6384',
-                        backgroundColor: 'rgba(255, 99, 132, 0.2)',
-                        fill: true,
-                        tension: 0.3
-                    },
-                    {
-                        label: 'Temperature (°C)',
-                        data: tempData,
-                        borderColor: '#36a2eb',
-                        backgroundColor: 'rgba(54, 162, 235, 0.2)',
-                        fill: true,
-                        tension: 0.3
-                    }
+                    { label: 'Hartslag', data: [], borderColor: '#6a3fb5', fill: false, tension: 0.3 },
+                    { label: 'Temperatuur', data: [], borderColor: '#36a2eb', fill: false, tension: 0.3 },
+                    { label: 'SpO2', data: [], borderColor: '#e84393', fill: false, tension: 0.3 }
                 ]
             },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                animation: { duration: 500 },
-                scales: {
-                    y: {
-                        beginAtZero: false
-                    }
-                }
-            }
+            options: { responsive: true, maintainAspectRatio: false }
         });
 
-    socket.on('mqtt_data', (data) => {
-        if (data.patient_id !== currentPatient) return; 
-        console.log('📦 Received MQTT data from server:', data);
-
+        socket.on('mqtt_data', (data) => {
             const time = new Date().toLocaleTimeString();
-
-            // Update chart data
-            chartLabels.push(time);
-            heartRateData.push(data.heartRate);
-            oxygenData.push(data.spo2);
-            tempData.push(data.temperatureC);
-
-            if (chartLabels.length > 20) {
-                chartLabels.shift();
-                heartRateData.shift();
-                oxygenData.shift();
-                tempData.shift();
+            if (healthChart.data.labels.length > 15) {
+                healthChart.data.labels.shift();
+                healthChart.data.datasets[0].data.shift();
+                healthChart.data.datasets[1].data.shift();
+                healthChart.data.datasets[2].data.shift();
             }
-
+            healthChart.data.labels.push(time);
+            healthChart.data.datasets[0].data.push(data.heartRate);
+            healthChart.data.datasets[1].data.push(data.temperatureC ?? null);
+            healthChart.data.datasets[2].data.push(data.spo2 ?? null);
             healthChart.update();
 
-            // Update individual sensor values
-            document.getElementById('heartRate').textContent = (data.heartRate !== undefined && data.heartRate !== -1) ? data.heartRate + ' bpm' : '-- bpm';
-            document.getElementById('oxygen-value').textContent = (data.spo2 !== undefined && data.spo2 !== -1) ? data.spo2 + ' %' : '-- %';
-            document.getElementById('temp-value').textContent = (data.temperatureC !== undefined && data.temperatureC !== 0) ? data.temperatureC.toFixed(1) + ' °C' : '-- °C';
-
-            document.getElementById('x-val').textContent = (data.accelX !== undefined) ? data.accelX.toFixed(2) : '--';
-            document.getElementById('y-val').textContent = (data.accelY !== undefined) ? data.accelY.toFixed(2) : '--';
-            document.getElementById('z-val').textContent = (data.accelZ !== undefined) ? data.accelZ.toFixed(2) : '--';
-
-            // Dynamic pulse animation based on heart rate
-            const heartRate = data.heartRate || 70;
-            const pulseDuration = Math.max(0.3, 60 / heartRate); // faster BPM = faster animation
-            document.querySelector('.pulse-ring').style.animationDuration = pulseDuration + 's';
-
-            if (data.heartRate > 0) { 
-                document.querySelector('.pulse-ring').style.animationPlayState  = "running"; 
-            } 
-            else { document.querySelector('.pulse-ring').style.animationPlayState = "paused"; 
-            }
-
-        
-            // Dynamic motion based on accelerometer
-            const accelX = Math.abs(data.accelX || 0);
-            const accelY = Math.abs(data.accelY || 0);
-            const accelZ = Math.abs(data.accelZ || 0);
-            const totalMotion = accelX + accelY + accelZ;
-
-            const motionBox = document.querySelector('.motion-box');
-            if (totalMotion > 10.5) {
-            // Strong movement
-                motionBox.style.animationDuration = '0.2s';
-                motionBox.style.backgroundColor = '#e74c3c'; // red
-            } else if (totalMotion > 9.5) {
-            // Mild movement
-                motionBox.style.animationDuration = '0.4s';
-                motionBox.style.backgroundColor = '#f39c12'; // orange
-            } else {
-             // Nearly still
-                motionBox.style.animationDuration = '2s';
-                motionBox.style.backgroundColor = '#28a745'; // green
-            }
-
-            if (totalMotion > 0){
-                document.querySelector('.motion-box').style.animationPlayState  = "running";
-            } else {
-                document.querySelector('.motion-box').style.animationPlayState  = "paused";
-            }
-
-
-            // IMPORTANT: Update AI prediction display
-            const predictionValueElement = document.getElementById('prediction-value');
-            if (predictionValueElement && data.prediction !== undefined) {
-                predictionValueElement.textContent = data.prediction;
-                // Add class for styling based on prediction
-                predictionValueElement.className = 'value ' + data.prediction.toLowerCase();
-            }
-            
-            // Update buffer length display (for debugging)
-            document.getElementById('buffer_length').textContent = data.buffer_length !== undefined ? data.buffer_length : '0';
-
+            document.getElementById('heartRate').textContent = (data.heartRate ?? '--') + ' bpm';
+            document.getElementById('oxygen-value').textContent = (data.spo2 ?? '--') + ' %';
+            document.getElementById('temp-value').textContent =
+                data.temperatureC != null ? data.temperatureC.toFixed(1) + ' °C' : '-- °C';
+            document.getElementById('x-val').textContent =
+                data.accelX != null ? data.accelX.toFixed(2) : '--';
+            document.getElementById('y-val').textContent =
+                data.accelY != null ? data.accelY.toFixed(2) : '--';
+            document.getElementById('z-val').textContent =
+                data.accelZ != null ? data.accelZ.toFixed(2) : '--';
+            document.getElementById('prediction-value').textContent =
+                data.prediction || 'Wachten op data...';
         });
 
-        document.getElementById('feedbackForm').addEventListener('submit', function(event) {
-            event.preventDefault();
-            const feedbackData = {
+        socket.on('alert', () => {
+            const bar = document.getElementById('alert-bar');
+            bar.style.display = 'block';
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            setTimeout(() => { bar.style.display = 'none'; }, 5000);
+        });
+
+        function switchTab(name) {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.querySelector(`[onclick="switchTab('${name}')"]`).classList.add('active');
+            document.getElementById('tab-' + name).classList.add('active');
+        }
+
+        function submitFeedback() {
+            const data = {
                 name: document.getElementById('userName').value,
                 email: document.getElementById('userEmail').value,
                 feedback: document.getElementById('userFeedback').value,
                 rating: document.getElementById('rating').value
             };
-
+            if (!data.name || !data.email || !data.feedback) {
+                alert('Vul alle velden in.');
+                return;
+            }
             fetch('/submit_feedback', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(feedbackData)
-            })
-            .then(response => response.json())
-            .then(data => {
-                document.getElementById('feedbackMessage').textContent = data.message;
-                document.getElementById('feedbackForm').reset(); // Reset the form
-            })
-            .catch(error => console.error('Error:', error));
-        });
-
-        function downloadReport() {
-            const csv = [
-                'Metric,Value',
-                `Heart Rate,${document.getElementById('heartRate').textContent}`,
-                `Oxygen,${document.getElementById('oxygen-value').textContent}`,
-                `Temperature,${document.getElementById('temp-value').textContent}`,
-                `X,${document.getElementById('x-val').textContent}`,
-                `Y,${document.getElementById('y-val').textContent}`,
-                `Z,${document.getElementById('z-val').textContent}`,
-                // Ensure the prediction value is included here too
-                `AI Prediction,${document.getElementById('prediction-value').textContent}`
-            ].join('\n');
-
-            const blob = new Blob([csv], { type: 'text/csv' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'wristly_health_report.csv';
-            a.click();
-            URL.revokeObjectURL(url);
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            }).then(res => res.json()).then(() => {
+                document.getElementById('feedbackMessage').textContent = "✅ Bedankt voor je feedback!";
+                document.getElementById('userName').value = '';
+                document.getElementById('userEmail').value = '';
+                document.getElementById('userFeedback').value = '';
+            }).catch(() => {
+                document.getElementById('feedbackMessage').textContent = "❌ Iets ging mis.";
+            });
         }
-
-    function switchPatient() {
-    currentPatient = document.getElementById('patientSelector').value;
-    // Clear the chart when switching patients
-    chartLabels.length = 0;
-    heartRateData.length = 0;
-    oxygenData.length = 0;
-    tempData.length = 0;
-    healthChart.update();
-    console.log(`Switched to ${currentPatient}`);
-}
     </script>
-
 </body>
 </html>
