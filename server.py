@@ -43,6 +43,7 @@ app.config['MAIL_PASSWORD'] = ''   # Fill in your app password
 app.config['MAIL_DEFAULT_SENDER'] = 'teamzsa2025@gmail.com'
 mail = Mail(app)
 
+fall_log_history = []
 latest_data = None
 sensor_data_buffer = deque(maxlen=5)
 userEmail = ''
@@ -138,6 +139,25 @@ def on_message(client, userdata, msg):
             scaled = scaler.transform(features)
             prediction_prob = model.predict(scaled)[0]
             prediction_label = label_mapping.get(np.argmax(prediction_prob), "Onbekend")
+
+            prediction_label = label_mapping.get(np.argmax(prediction_prob), "Onbekend")
+
+            if prediction_label == 'fall':
+                timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                spo2 = data.get('spo2', '--')
+                fall_entry = {
+                    "timestamp": timestamp,
+                    "spo2": spo2
+                }
+                fall_log_history.append(fall_entry)
+                socketio.emit('alert', {"status": "FALL_DETECTED"})
+                socketio.emit('fall_log', fall_entry)
+                if userEmail:
+                    send_email(
+                        "🚨 VAL GEDETECTEERD!",
+                        userEmail,
+                        f"Val gedetecteerd op: {timestamp}\nSpO2: {spo2}%"
+                    )
 
         data['prediction'] = prediction_label
         data['buffer_length'] = len(sensor_data_buffer)
