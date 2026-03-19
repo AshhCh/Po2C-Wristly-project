@@ -45,6 +45,7 @@ mail = Mail(app)
 
 fall_log_history = []
 latest_data = None
+last_heart_rate = '--'
 sensor_data_buffer = deque(maxlen=5)
 userEmail = ''
 
@@ -100,7 +101,7 @@ def on_message(client, userdata, msg):
         if topic == MQTT_ALERT_TOPIC:
             print("🚨 VAL GEDETECTEERD:", data)
             timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            spo2 = data.get('spo2', '--')
+            heartRate = data.get('heartRate', '--')
 
             # Emit alert to main dashboard
             socketio.emit('alert', {"status": "FALL_DETECTED"})
@@ -122,6 +123,7 @@ def on_message(client, userdata, msg):
         # --- Normal sensor data ---
         latest_data = data
         sensor_data_buffer.append(data)
+        last_heart_rate = data.get('heartRate',)
         prediction_label = "Buffer vullen..."
 
         if model and scaler and len(sensor_data_buffer) == sensor_data_buffer.maxlen:
