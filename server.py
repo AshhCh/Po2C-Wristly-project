@@ -12,7 +12,7 @@ import pickle
 from collections import deque
 from datetime import datetime
 
-# --- Try to import TensorFlow, fall back gracefully ---
+# try to import tensorflow, but handle the case where it's not installed
 try:
     import tensorflow as tf
     TF_AVAILABLE = True
@@ -39,7 +39,7 @@ app.config['MAIL_SERVER'] = 'smtp.gmail.com'
 app.config['MAIL_PORT'] = 587
 app.config['MAIL_USE_TLS'] = True
 app.config['MAIL_USERNAME'] = 'teamzsa2025@gmail.com'
-app.config['MAIL_PASSWORD'] = ''   # Fill in your app password
+app.config['MAIL_PASSWORD'] = ''   # Fill in app password 
 app.config['MAIL_DEFAULT_SENDER'] = 'teamzsa2025@gmail.com'
 mail = Mail(app)
 
@@ -101,14 +101,14 @@ def on_message(client, userdata, msg):
         if topic == MQTT_ALERT_TOPIC:
             print("🚨 VAL GEDETECTEERD:", data)
             timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            heartRate = data.get('heartRate', '--')
+            alert_heartRate = data.get('heartRate', '--')
+            spo2 = data.get('spo2', '--')
 
             # Emit alert to main dashboard
             socketio.emit('alert', {"status": "FALL_DETECTED"})
-
-            # FIXED: Emit fall_log so special.html also receives it
             socketio.emit('fall_log', {
                 "timestamp": timestamp,
+                "heartRate": alert_heartRate,
                 "spo2": spo2
             })
 
@@ -116,14 +116,14 @@ def on_message(client, userdata, msg):
                 send_email(
                     "🚨 VAL GEDETECTEERD!",
                     userEmail,
-                    f"Er is een val gedetecteerd op: {timestamp}\nSpO2 op moment van val: {spo2}%"
+                    f"Er is een val gedetecteerd op: {timestamp}\nHartslag: {alert_heartRate} bpm\nSpO2: {spo2}%"
                 )
             return
 
         # --- Normal sensor data ---
         latest_data = data
         sensor_data_buffer.append(data)
-        last_heart_rate = data.get('heartRate',)
+        last_heart_rate = data.get('heartRate', '--')
         prediction_label = "Buffer vullen..."
 
         if model and scaler and len(sensor_data_buffer) == sensor_data_buffer.maxlen:
@@ -147,9 +147,11 @@ def on_message(client, userdata, msg):
             if prediction_label == 'fall':
                 timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 spo2 = data.get('spo2', '--')
+                alert_heartRate = data.get('heartRate', '--')
                 fall_entry = {
                     "timestamp": timestamp,
-                    "spo2": spo2
+                    "spo2": spo2,
+                    "heartRate": alert_heartRate
                 }
                 fall_log_history.append(fall_entry)
                 socketio.emit('alert', {"status": "FALL_DETECTED"})
@@ -158,7 +160,7 @@ def on_message(client, userdata, msg):
                     send_email(
                         "🚨 VAL GEDETECTEERD!",
                         userEmail,
-                        f"Val gedetecteerd op: {timestamp}\nSpO2: {spo2}%"
+                        f"Val gedetecteerd op: {timestamp}\nHartslag: {alert_heartRate} bpm\nSpO2: {spo2}%"
                     )
 
         data['prediction'] = prediction_label
